@@ -6,8 +6,8 @@ class PhysicsObject:
     def __init__(self, game, pos):
         self.game = game
         self.pos = pos
-        self.vel = np.zeros(2)
-        self.acc = np.zeros(2)
+        self.vel = np.zeros(2,dtype=np.float64)
+        self.acc = np.zeros(2,dtype=np.float64)
         self.speed = 1
         self.friction = 0.9
         self.margin = 0

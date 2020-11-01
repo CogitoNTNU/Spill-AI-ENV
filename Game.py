@@ -1,6 +1,8 @@
 import gym
 import pygame as pg
 import random
+from PhysicsObject import PhysicsObject
+import numpy as np
 
 class Game(gym.Env):
     
@@ -12,6 +14,7 @@ class Game(gym.Env):
         self.screen = pg.display.set_mode((screen_width,screen_height))
         self.running = True
         self.game_over = True
+        self.object = PhysicsObject(self,np.array([100,100],dtype=np.float64))
         self.reset()
 
     def events(self):
@@ -23,12 +26,14 @@ class Game(gym.Env):
         self.game_over = False
 
     def step(self,action):
-        
-        return _,_,self.game_over,{}
+        self.object.vel=np.array([1,1],dtype=np.float64)
+        self.object.update()
+      #  return _,_,self.game_over,{}
 
     
     def draw(self):
-        pg.draw.circle(self.screen,(255,255,255),(random.randint(0,self.screen_width),random.randint(0,self.screen_height)),10)
+        self.screen.fill((0,0,0))
+        pg.draw.circle(self.screen,(255,255,255),self.object.pos,10)
     
     def render(self,mode="human"):
         pass
@@ -39,5 +44,6 @@ if __name__ == "__main__":
     while game.running:
         game.draw()
         game.events()
+        game.step(1)
         pg.display.update()
 
