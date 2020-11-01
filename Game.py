@@ -14,10 +14,20 @@ class Game(gym.Env):
         self.game_over = True
         self.reset()
 
+    def click(event):
+        print("click")
+        pass
+    def keyup(event):
+        print("keyup")
+        pass
     def events(self):
         for event in pg.event.get():
             if event.type ==pg.QUIT:
                 self.running = False
+            elif event.type == pg.KEYUP:
+                keyup(event)
+            elif event.type == pg.MOUSEBUTTONDOWN:
+                click(event)
 
     def reset(self):
         self.game_over = False
