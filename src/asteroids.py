@@ -45,7 +45,10 @@ class Asteroids():
 
     explodingTtl = 180
 
-    def __init__(self):
+    def __init__(self, agent):
+        self.agent = agent
+        self.reward = 0
+        
         self.stage = Stage('Atari Asteroids', (1024, 768))
         self.paused = False
         self.showingFPS = False
@@ -60,6 +63,8 @@ class Asteroids():
         self.lives = 0
 
     def initialiseGame(self):
+        self.reward = 0
+        
         self.gameState = 'playing'
         [self.stage.removeSprite(sprite)
          for sprite in self.rockList]  # clear old rocks
@@ -107,61 +112,102 @@ class Asteroids():
             newRock = Rock(self.stage, position, Rock.largeRockType)
             self.stage.addSprite(newRock)
             self.rockList.append(newRock)
+    
+    def reset(self):
+        self.clock = pygame.time.Clock()
 
-    def playGame(self):
-
-        clock = pygame.time.Clock()
-
-        frameCount = 0.0
-        timePassed = 0.0
+        self.frameCount = 0.0
+        self.timePassed = 0.0
         self.fps = 0.0
+    def step(self, agentInput = None):
+        self.reward = 0
+        
+        # calculate fps
+        self.timePassed += self.clock.tick(60)
+        self.frameCount += 1
+        if self.frameCount % 10 == 0:  # every 10 frames
+            # nearest integer
+            self.fps = round((self.frameCount / (self.timePassed / 1000.0)))
+            # reset counter
+            self.timePassed = 0
+            self.frameCount = 0
+            self.reward -= 1
+
+        self.secondsCount += 1
+        # bool quit
+        # bool space
+        # int turn (-1, 0 or 1)
+        # bool gas
+        
+
+
+        # pause
+        if self.paused and not self.frameAdvance:
+            self.displayPaused()
+            return
+
+        self.stage.screen.fill((10, 10, 10))
+        self.stage.moveSprites()
+        self.stage.drawSprites()
+        self.doSaucerLogic()
+        self.displayScore()
+        if self.showingFPS:
+            self.displayFps()  # for debug
+        self.checkScore()
+
+        
+        if self.agent:
+            self.inputAgent(pygame.event.get(), agentInput)
+        else:
+            self.input(pygame.event.get())
+        
+        # Process keys
+        if self.gameState == 'playing':
+            if self.agent:
+                self.playingAgent(agentInput)
+            else:
+                self.playing()
+        elif self.gameState == 'exploding':
+            self.exploding()
+        else:
+            self.displayText()
+
+        # Double buffer draw
+        pygame.display.flip()
+        
+        self.score += self.reward
+        state = {}
+        done = False
+        info = "hey"
+        return state, self.reward, done, info
+    
+    def playHumanGame(self):
+        self.reset()
+
         # Main loop
         while True:
-
-            # calculate fps
-            timePassed += clock.tick(60)
-            frameCount += 1
-            if frameCount % 10 == 0:  # every 10 frames
-                # nearest integer
-                self.fps = round((frameCount / (timePassed / 1000.0)))
-                # reset counter
-                timePassed = 0
-                frameCount = 0
-
-            self.secondsCount += 1
-
-            self.input(pygame.event.get())
-
-            # pause
-            if self.paused and not self.frameAdvance:
-                self.displayPaused()
-                continue
-
-            self.stage.screen.fill((10, 10, 10))
-            self.stage.moveSprites()
-            self.stage.drawSprites()
-            self.doSaucerLogic()
-            self.displayScore()
-            if self.showingFPS:
-                self.displayFps()  # for debug
-            self.checkScore()
-
-            # Process keys
-            if self.gameState == 'playing':
-                self.playing()
-            elif self.gameState == 'exploding':
-                self.exploding()
-            else:
-                self.displayText()
-
-            # Double buffer draw
-            pygame.display.flip()
-
+            self.step()
+    def playAgentGame(self):
+        self.reset()
+        
+        while True:
+            state, reward, done, info = self.step([False, True, -1, True])
+            print(reward)
+    def playingAgent(self, agentInput):
+        if self.lives == 0:
+            self.gameState = 'attract_mode'
+        else:
+            self.processKeysAgent(agentInput)
+            
+            self.checkCollisions()
+            if len(self.rockList) == 0:
+                self.levelUp()
     def playing(self):
         if self.lives == 0:
             self.gameState = 'attract_mode'
         else:
             self.processKeys()
+            
             self.checkCollisions()
             if len(self.rockList) == 0:
                 self.levelUp()
@@ -239,14 +285,44 @@ class Asteroids():
             self.stage.screen.blit(pausedText, textRect)
             pygame.display.update()
 
+    def inputAgent(self, events, agentInput):
+        
+        
+        k = agentInput
+        self.frameAdvance = False
+        
+        if k[0]:  # quit
+            pygame.quit()
+            sys.exit(0)
+        if self.gameState == 'playing':
+            if k[1]:  # space
+                self.ship.fireBullet()
+        if self.gameState == "attract_mode":
+            self.initialiseGame()
+        
+        for event in events:
+            if event.type == QUIT:
+                pygame.quit()
+                sys.exit(0)
+            elif event.type == KEYDOWN:
+                if event.key == K_ESCAPE:
+                    pygame.quit()
+                    sys.exit(0)
+                if event.key == K_r:
+                    self.reset()
+                    
+        
+    
     # Should move the ship controls into the ship class
     def input(self, events):
         self.frameAdvance = False
         for event in events:
             if event.type == QUIT:
+                pygame.quit()
                 sys.exit(0)
             elif event.type == KEYDOWN:
                 if event.key == K_ESCAPE:
+                    pygame.quit()
                     sys.exit(0)
                 if self.gameState == 'playing':
                     if event.key == K_SPACE:
@@ -294,6 +370,19 @@ class Asteroids():
             self.ship.thrustJet.accelerating = True
         else:
             self.ship.thrustJet.accelerating = False
+    
+    def processKeysAgent(self, agentInput):
+        k = agentInput
+        if k[2] == -1:  # Turn integer, either -1, 0 or 1
+            self.ship.rotateLeft()
+        elif k[2] == 1:
+            self.ship.rotateRight()
+        
+        if k[3]:  # Gas gas gas
+            self.ship.increaseThrust()
+            self.ship.thrustJet.accelerating = True
+        else:
+            self.ship.thrustJet.accelerating = False
 
     # Check for ship hitting the rocks etc.
 
@@ -323,7 +412,7 @@ class Asteroids():
 
                 if self.ship.bulletCollision(self.saucer):
                     saucerHit = True
-                    self.score += self.saucer.scoreValue
+                    self.reward += self.saucer.scoreValue
 
             if self.ship.bulletCollision(rock):
                 rockHit = True
@@ -335,14 +424,14 @@ class Asteroids():
                 if rock.rockType == Rock.largeRockType:
                     playSound("explode1")
                     newRockType = Rock.mediumRockType
-                    self.score += 50
+                    self.reward += 50
                 elif rock.rockType == Rock.mediumRockType:
                     playSound("explode2")
                     newRockType = Rock.smallRockType
-                    self.score += 100
+                    self.reward += 100
                 else:
                     playSound("explode3")
-                    self.score += 200
+                    self.reward += 200
 
                 if rock.rockType != Rock.smallRockType:
                     # new rocks
@@ -423,7 +512,10 @@ if not pygame.mixer:
     print('Warning, sound disabled')
 
 initSoundManager()
-game = Asteroids()  # create object game from class Asteroids
-game.playGame()
+game = Asteroids(True)  # create object game from class Asteroids
+if game.agent:
+    game.playAgentGame()
+else:
+    game.playHumanGame()
 
 ####
